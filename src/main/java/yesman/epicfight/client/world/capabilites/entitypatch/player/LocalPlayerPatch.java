@@ -30,6 +30,7 @@ import yesman.epicfight.api.animation.types.StaticAnimation;
 import yesman.epicfight.api.utils.AttackResult;
 import yesman.epicfight.api.utils.math.MathUtils;
 import yesman.epicfight.client.ClientEngine;
+import yesman.epicfight.client.events.engine.ControllEngine;
 import yesman.epicfight.client.events.engine.RenderEngine;
 import yesman.epicfight.client.gui.screen.SkillBookScreen;
 import yesman.epicfight.main.EpicFightMod;
@@ -280,7 +281,7 @@ public class LocalPlayerPatch extends AbstractClientPlayerPatch<LocalPlayer> {
 	
 	@Override
 	public boolean shouldBlockMoving() {
-		return ClientEngine.getInstance().controllEngine.isKeyDown(this.minecraft.options.keyDown);
+		return ControllEngine.isKeyDown(this.minecraft.options.keyDown);
 	}
 	
 	@Override

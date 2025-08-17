@@ -1,12 +1,9 @@
 package yesman.epicfight.client.events.engine;
 
-import java.util.Map;
 import java.util.Set;
-import java.util.function.BiConsumer;
 
 import org.lwjgl.glfw.GLFW;
 
-import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.platform.InputConstants;
 
@@ -21,11 +18,9 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.MovementInputUpdateEvent;
-import net.minecraftforge.client.settings.KeyMappingLookup;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import yesman.epicfight.api.animation.types.EntityState;
 import yesman.epicfight.client.gui.screen.IngameConfigurationScreen;
 import yesman.epicfight.client.gui.screen.SkillEditScreen;
@@ -44,12 +39,10 @@ import yesman.epicfight.world.gamerule.EpicFightGamerules;
 
 @OnlyIn(Dist.CLIENT)
 public class ControllEngine {
-	private final Map<KeyMapping, BiConsumer<KeyMapping, Integer>> keyFunctions = Maps.newHashMap();
 	private final Set<Object> packets = Sets.newHashSet();
 	private final Minecraft minecraft;
 	private LocalPlayer player;
 	private LocalPlayerPatch playerpatch;
-	private KeyMappingLookup keyHash;
 	private int weaponInnatePressCounter = 0;
 	private int sneakPressCounter = 0;
 	private int moverPressCounter = 0;
@@ -71,20 +64,6 @@ public class ControllEngine {
 		Events.controllEngine = this;
 		this.minecraft = Minecraft.getInstance();
 		this.options = this.minecraft.options;
-		this.keyFunctions.put(EpicFightKeyMappings.ATTACK, this::attackKeyPressed);
-		this.keyFunctions.put(this.options.keySwapOffhand, this::swapHandKeyPressed);
-		this.keyFunctions.put(EpicFightKeyMappings.SWITCH_MODE, this::switchModeKeyPressed);
-		this.keyFunctions.put(EpicFightKeyMappings.DODGE, this::dodgeKeyPressed);
-		this.keyFunctions.put(EpicFightKeyMappings.GUARD, this::guardPressed);
-		this.keyFunctions.put(EpicFightKeyMappings.WEAPON_INNATE_SKILL, this::weaponInnateSkillKeyPressed);
-		this.keyFunctions.put(EpicFightKeyMappings.MOVER_SKILL, this::moverKeyPressed);
-		this.keyFunctions.put(EpicFightKeyMappings.LOCK_ON, this::lockonPressed);
-		
-		try {
-			this.keyHash = (KeyMappingLookup) ObfuscationReflectionHelper.findField(KeyMapping.class, "f_90810_").get(null);
-		} catch (IllegalArgumentException | IllegalAccessException e) {
-			e.printStackTrace();
-		}
 	}
 	
 	public void setPlayerPatch(LocalPlayerPatch playerpatch) {
@@ -109,170 +88,122 @@ public class ControllEngine {
 		return !playerState.turningLocked() || this.player.isRidingJumpable();
 	}
 	
-	private void attackKeyPressed(KeyMapping key, int action) {
-		if (action == 1 && this.playerpatch.isBattleMode() && this.currentChargingKey != key && !Minecraft.getInstance().isPaused()) {
-			//Remove key press to prevent vanilla attack
-			if (this.options.keyAttack.getKey() == EpicFightKeyMappings.ATTACK.getKey()) {
-				this.setKeyBind(this.options.keyAttack, false);
-				while (this.options.keyAttack.consumeClick());
-			}
-			
-			if (!EpicFightKeyMappings.ATTACK.getKey().equals(EpicFightKeyMappings.WEAPON_INNATE_SKILL.getKey())) {
-				SkillSlot slot = (!this.player.isOnGround() && !this.player.isInWater() && this.player.getDeltaMovement().y > 0.05D) ? SkillSlots.AIR_ATTACK : SkillSlots.BASIC_ATTACK;
-				
-				if (this.playerpatch.getSkill(slot).sendExecuteRequest(this.playerpatch, this).isExecutable()) {
-					this.player.resetAttackStrengthTicker();
-					this.attackLightPressToggle = false;
-					this.releaseAllServedKeys();
-				} else {
-					if (!this.player.isSpectator() && slot == SkillSlots.BASIC_ATTACK) {
-						this.reserveKey(slot, EpicFightKeyMappings.ATTACK);
-					}
-				}
-				
-				this.lockHotkeys();
-				
-				this.attackLightPressToggle = false;
-				this.weaponInnatePressToggle = false;
-				this.weaponInnatePressCounter = 0;
-			} else {
-				if (!this.weaponInnatePressToggle) {
-					this.weaponInnatePressToggle = true;
-				}
-			}
-		}
-	}
-	
-	private void dodgeKeyPressed(KeyMapping key, int action) {
-		if (action == 1 && this.playerpatch.isBattleMode() && this.currentChargingKey != key) {
-			if (key.getKey().getValue() == this.options.keyShift.getKey().getValue()) {
-				if (this.player.getVehicle() == null) {
-					if (!this.sneakPressToggle) {
-						this.sneakPressToggle = true;
-					}
-				}
-			} else {
-				SkillSlot skillCategory = (this.playerpatch.getEntityState().knockDown()) ? SkillSlots.KNOCKDOWN_WAKEUP : SkillSlots.DODGE;
-				SkillContainer skill = this.playerpatch.getSkill(skillCategory);
-				
-				if (skill.sendExecuteRequest(this.playerpatch, this).shouldReserverKey()) {
-					this.reserveKey(SkillSlots.DODGE, key);
-				}
-			}
-		}
-	}
-	
-	private void guardPressed(KeyMapping key, int action) {
-		if (action == 1) {
-			//this.playerpatch.getSkill(SkillSlots.GUARD).sendExecuteRequest(this.playerpatch, this);
-		}
-	}
-	
-	private void swapHandKeyPressed(KeyMapping key, int action) {
-		if (this.playerpatch.getEntityState().inaction() || (!this.playerpatch.getHoldingItemCapability(InteractionHand.MAIN_HAND).canBePlacedOffhand())) {
-			while (key.consumeClick()) {}
-			this.setKeyBind(key, false);
-		}
-	}
-	
-	private void switchModeKeyPressed(KeyMapping key, int action) {
-		if (action == 1) {
-			if (this.playerpatch.getOriginal().level.getGameRules().getBoolean(EpicFightGamerules.CAN_SWITCH_COMBAT)) {
-				this.playerpatch.toggleMode();
-			}
-		}
-	}
-	
-	private void weaponInnateSkillKeyPressed(KeyMapping key, int action) {
-		if (action == 1 && this.playerpatch.isBattleMode() && this.currentChargingKey != key) {
-			if (!EpicFightKeyMappings.ATTACK.getKey().equals(EpicFightKeyMappings.WEAPON_INNATE_SKILL.getKey())) {
-				if (this.playerpatch.getSkill(SkillSlots.WEAPON_INNATE).sendExecuteRequest(this.playerpatch, this).shouldReserverKey()) {
-					if (!this.player.isSpectator()) {
-						this.reserveKey(SkillSlots.WEAPON_INNATE, key);
-					}
-				} else {
-					this.lockHotkeys();
-				}
-			}
-		}
-	}
-	
-	private void moverKeyPressed(KeyMapping key, int action) {
-		if (action == 1 && this.playerpatch.isBattleMode() && !this.playerpatch.isChargingSkill()) {
-			if (key.getKey().getValue() == this.options.keyJump.getKey().getValue()) {
-				SkillContainer skillContainer = this.playerpatch.getSkill(SkillSlots.MOVER);
-				SkillExecuteEvent event = new SkillExecuteEvent(this.playerpatch, skillContainer);
-				
-				if (skillContainer.canExecute(playerpatch, event) && this.player.getVehicle() == null) {
-					if (!this.moverPressToggle) {
-						this.moverPressToggle = true;
-					}
-				}
-			} else {
-				SkillContainer skill = this.playerpatch.getSkill(SkillSlots.MOVER);
-				skill.sendExecuteRequest(this.playerpatch, this);
-			}
-		}
-	}
-
-	private void lockonPressed(KeyMapping key, int action) {
-		if (action == 1) {
-			this.playerpatch.toggleLockOn();
-		}
-	}
-	
-	private void inputTick(Input input) {
-		if (this.moverPressToggle) {
-			if (!this.isKeyDown(this.options.keyJump)) {
-				this.moverPressToggle = false;
-				this.moverPressCounter = 0;
-				
-				if (this.player.isOnGround()) {
-					input.jumping = true;
-				}
-			} else {
-				if (this.moverPressCounter > EpicFightMod.CLIENT_INGAME_CONFIG.longPressCount.getValue()) {
-					SkillContainer skill = this.playerpatch.getSkill(SkillSlots.MOVER);
-					skill.sendExecuteRequest(this.playerpatch, this);
-					
-					this.moverPressToggle = false;
-					this.moverPressCounter = 0;
-				} else {
-					input.jumping = false;
-					this.moverPressCounter++;
-				}
-			}
-		}
-		
-		if (!this.canPlayerMove(this.playerpatch.getEntityState())) {
-			input.forwardImpulse = 0F;
-			input.leftImpulse = 0F;
-			input.up = false;
-			input.down = false;
-			input.left = false;
-			input.right = false;
-			input.jumping = false;
-			input.shiftKeyDown = false;
-			this.player.sprintTriggerTime = -1;
-			this.player.setSprinting(false);
-		}
-		
-		if (this.player.isAlive()) {
-			this.playerpatch.getEventListener().triggerEvents(EventType.MOVEMENT_INPUT_EVENT, new MovementInputEvent(this.playerpatch, input));
-		}
-	}
-	
-	private void tick() {
-		if (EpicFightKeyMappings.SKILL_EDIT.consumeClick()) {
+	public void handleEpicFightKeyMappings() {
+		if (keyPressed(EpicFightKeyMappings.SKILL_EDIT, false)) {
 			if (this.playerpatch.getSkillCapability() != null) {
 				Minecraft.getInstance().setScreen(new SkillEditScreen(this.player, this.playerpatch.getSkillCapability()));
 			}
 		}
 		
-		if (EpicFightKeyMappings.CONFIG.consumeClick()) {
+		if (keyPressed(EpicFightKeyMappings.CONFIG, false)) {
 			Minecraft.getInstance().setScreen(new IngameConfigurationScreen(this.minecraft, null));
 		}
 		
+		while (keyPressed(EpicFightKeyMappings.ATTACK, true)) {
+			if (this.playerpatch.isBattleMode() && this.currentChargingKey != EpicFightKeyMappings.ATTACK) {
+				if (!EpicFightKeyMappings.ATTACK.getKey().equals(EpicFightKeyMappings.WEAPON_INNATE_SKILL.getKey())) {
+					SkillSlot slot = (!this.player.isOnGround() && !this.player.isInWater() && this.player.getDeltaMovement().y > 0.05D) ? SkillSlots.AIR_ATTACK : SkillSlots.BASIC_ATTACK;
+					
+					if (this.playerpatch.getSkill(slot).sendExecuteRequest(this.playerpatch, this).isExecutable()) {
+						this.player.resetAttackStrengthTicker();
+						this.attackLightPressToggle = false;
+						this.releaseAllServedKeys();
+					} else {
+						if (!this.player.isSpectator() && slot == SkillSlots.BASIC_ATTACK) {
+							this.reserveKey(slot, EpicFightKeyMappings.ATTACK);
+						}
+					}
+					
+					this.lockHotkeys();
+					this.attackLightPressToggle = false;
+					this.weaponInnatePressToggle = false;
+					this.weaponInnatePressCounter = 0;
+				} else {
+					if (!this.weaponInnatePressToggle) {
+						this.weaponInnatePressToggle = true;
+					}
+				}
+				
+				//Disable vanilla attack
+				if (this.options.keyAttack.getKey() == EpicFightKeyMappings.ATTACK.getKey()) {
+					disableKey(this.options.keyAttack);
+				}
+			}
+		}
+		
+		while (keyPressed(EpicFightKeyMappings.DODGE, true)) {
+			if (this.playerpatch.isBattleMode() && this.currentChargingKey != EpicFightKeyMappings.DODGE) {
+				if (EpicFightKeyMappings.DODGE.getKey().getValue() == this.options.keyShift.getKey().getValue()) {
+					if (this.player.getVehicle() == null) {
+						if (!this.sneakPressToggle) {
+							this.sneakPressToggle = true;
+						}
+					}
+				} else {
+					SkillSlot skillCategory = (this.playerpatch.getEntityState().knockDown()) ? SkillSlots.KNOCKDOWN_WAKEUP : SkillSlots.DODGE;
+					SkillContainer skill = this.playerpatch.getSkill(skillCategory);
+					
+					if (skill.sendExecuteRequest(this.playerpatch, this).shouldReserverKey()) {
+						this.reserveKey(SkillSlots.DODGE, EpicFightKeyMappings.DODGE);
+					}
+				}
+			}
+		}
+		
+		while (keyPressed(EpicFightKeyMappings.GUARD, true)) {
+		}
+		
+		while (keyPressed(EpicFightKeyMappings.WEAPON_INNATE_SKILL, true)) {
+			if (this.playerpatch.isBattleMode() && this.currentChargingKey != EpicFightKeyMappings.WEAPON_INNATE_SKILL) {
+				if (!EpicFightKeyMappings.ATTACK.getKey().equals(EpicFightKeyMappings.WEAPON_INNATE_SKILL.getKey())) {
+					if (this.playerpatch.getSkill(SkillSlots.WEAPON_INNATE).sendExecuteRequest(this.playerpatch, this).shouldReserverKey()) {
+						if (!this.player.isSpectator()) {
+							this.reserveKey(SkillSlots.WEAPON_INNATE, EpicFightKeyMappings.WEAPON_INNATE_SKILL);
+						}
+					} else {
+						this.lockHotkeys();
+					}
+				}
+			}
+		}
+		
+		while (keyPressed(EpicFightKeyMappings.MOVER_SKILL, true)) {
+			if (this.playerpatch.isBattleMode() && !this.playerpatch.isChargingSkill()) {
+				if (EpicFightKeyMappings.MOVER_SKILL.getKey().getValue() == this.options.keyJump.getKey().getValue()) {
+					SkillContainer skillContainer = this.playerpatch.getSkill(SkillSlots.MOVER);
+					SkillExecuteEvent event = new SkillExecuteEvent(this.playerpatch, skillContainer);
+					
+					if (skillContainer.canExecute(playerpatch, event) && this.player.getVehicle() == null) {
+						if (!this.moverPressToggle) {
+							this.moverPressToggle = true;
+						}
+					}
+				} else {
+					SkillContainer skill = this.playerpatch.getSkill(SkillSlots.MOVER);
+					skill.sendExecuteRequest(this.playerpatch, this);
+				}
+			}
+		}
+		
+		while (keyPressed(EpicFightKeyMappings.SWITCH_MODE, false)) {
+			if (this.playerpatch.getOriginal().level().getGameRules().getBoolean(EpicFightGamerules.CAN_SWITCH_COMBAT)) {
+				this.playerpatch.toggleMode();
+			}
+		}
+		
+		while (keyPressed(EpicFightKeyMappings.LOCK_ON, false)) {
+			this.playerpatch.toggleLockOn();
+		}
+		
+		//Disable swap hand items
+		if (this.playerpatch.getEntityState().inaction() || (!this.playerpatch.getHoldingItemCapability(InteractionHand.MAIN_HAND).canBePlacedOffhand())) {
+			disableKey(this.minecraft.options.keySwapOffhand);
+		}
+		
+		this.tick();
+	}
+	
+	private void tick() {
 		if (this.playerpatch == null || !this.playerpatch.isBattleMode() || Minecraft.getInstance().isPaused()) {
 			return;
 		}
@@ -282,7 +213,7 @@ public class ControllEngine {
 		}
 		
 		if (this.weaponInnatePressToggle) {
-			if (!this.isKeyDown(EpicFightKeyMappings.WEAPON_INNATE_SKILL)) {
+			if (!isKeyDown(EpicFightKeyMappings.WEAPON_INNATE_SKILL)) {
 				this.attackLightPressToggle = true;
 				this.weaponInnatePressToggle = false;
 				this.weaponInnatePressCounter = 0;
@@ -291,7 +222,7 @@ public class ControllEngine {
 					if (this.weaponInnatePressCounter > EpicFightMod.CLIENT_INGAME_CONFIG.longPressCount.getValue()) {
 						if (this.minecraft.hitResult.getType() == HitResult.Type.BLOCK && this.playerpatch.getTarget() == null && !EpicFightMod.CLIENT_INGAME_CONFIG.noMiningInCombat.getValue()) {
 				            this.minecraft.startAttack();
-				            this.setKeyBind(EpicFightKeyMappings.ATTACK, true);
+				            setKeyBind(EpicFightKeyMappings.ATTACK, true);
 						} else if (this.playerpatch.getSkill(SkillSlots.WEAPON_INNATE).sendExecuteRequest(this.playerpatch, this).shouldReserverKey()) {
 							if (!this.player.isSpectator()) {
 								this.reserveKey(SkillSlots.WEAPON_INNATE, EpicFightKeyMappings.WEAPON_INNATE_SKILL);
@@ -314,7 +245,6 @@ public class ControllEngine {
 			
 			if (this.playerpatch.getSkill(slot).sendExecuteRequest(this.playerpatch, this).isExecutable()) {
 				this.player.resetAttackStrengthTicker();
-				this.attackLightPressToggle = false;
 				this.releaseAllServedKeys();
 			} else {
 				if (!this.player.isSpectator() && slot == SkillSlots.BASIC_ATTACK) {
@@ -330,7 +260,7 @@ public class ControllEngine {
 		}
 		
 		if (this.sneakPressToggle) {
-			if (!this.isKeyDown(this.options.keyShift)) {
+			if (!isKeyDown(this.options.keyShift)) {
 				SkillSlot skillSlot = (this.playerpatch.getEntityState().knockDown()) ? SkillSlots.KNOCKDOWN_WAKEUP : SkillSlots.DODGE;
 				SkillContainer skill = this.playerpatch.getSkill(skillSlot);
 				
@@ -354,7 +284,7 @@ public class ControllEngine {
 			SkillContainer skill = this.playerpatch.getSkill(this.reservedOrChargingSkillSlot);
 			
 			if (skill.getSkill() instanceof ChargeableSkill chargingSkill) {
-				if (!this.isKeyDown(this.currentChargingKey)) {
+				if (!isKeyDown(this.currentChargingKey)) {
 					this.chargeKeyUnpressed = true;
 				}
 				
@@ -396,6 +326,49 @@ public class ControllEngine {
 			for (int i = 0; i < 9; ++i) {
 				while (this.options.keyHotbarSlots[i].consumeClick());
 			}
+			
+			while (this.options.keyDrop.consumeClick());
+		}
+	}
+	
+	private void inputTick(Input input) {
+		if (this.moverPressToggle) {
+			if (!isKeyDown(this.options.keyJump)) {
+				this.moverPressToggle = false;
+				this.moverPressCounter = 0;
+				
+				if (this.player.isOnGround()) {
+					input.jumping = true;
+				}
+			} else {
+				if (this.moverPressCounter > EpicFightMod.CLIENT_INGAME_CONFIG.longPressCount.getValue()) {
+					SkillContainer skill = this.playerpatch.getSkill(SkillSlots.MOVER);
+					skill.sendExecuteRequest(this.playerpatch, this);
+					
+					this.moverPressToggle = false;
+					this.moverPressCounter = 0;
+				} else {
+					input.jumping = false;
+					this.moverPressCounter++;
+				}
+			}
+		}
+		
+		if (!this.canPlayerMove(this.playerpatch.getEntityState())) {
+			input.forwardImpulse = 0F;
+			input.leftImpulse = 0F;
+			input.up = false;
+			input.down = false;
+			input.left = false;
+			input.right = false;
+			input.jumping = false;
+			input.shiftKeyDown = false;
+			this.player.sprintTriggerTime = -1;
+			this.player.setSprinting(false);
+		}
+		
+		if (this.player.isAlive()) {
+			this.playerpatch.getEventListener().triggerEvents(EventType.MOVEMENT_INPUT_EVENT, new MovementInputEvent(this.playerpatch, input));
 		}
 	}
 	
@@ -420,8 +393,8 @@ public class ControllEngine {
 		this.reserveCounter = -1;
 		this.reservedKey = null;
 	}
-	
-	public boolean isKeyDown(KeyMapping key) {
+
+	public static boolean isKeyDown(KeyMapping key) {
 		if (key.getKey().getType() == InputConstants.Type.KEYSYM) {
 			return key.isDown() || GLFW.glfwGetKey(Minecraft.getInstance().getWindow().getWindow(), key.getKey().getValue()) > 0;
 		} else if(key.getKey().getType() == InputConstants.Type.MOUSE) {
@@ -430,8 +403,8 @@ public class ControllEngine {
 			return false;
 		}
 	}
-	
-	public void setKeyBind(KeyMapping key, boolean setter) {
+
+	public static void setKeyBind(KeyMapping key, boolean setter) {
 		KeyMapping.set(key.getKey(), setter);
 	}
 	
@@ -452,59 +425,30 @@ public class ControllEngine {
 		this.packets.add(packet);
 	}
 	
+	private static boolean keyPressed(KeyMapping key, boolean eventCheck) {
+		if (eventCheck) {
+			int mouseButton = InputConstants.Type.MOUSE == key.getKey().getType() ? key.getKey().getValue() : -1;
+			
+			InputEvent.InteractionKeyMappingTriggered inputEvent = net.minecraftforge.client.ForgeHooksClient.onClickInput(mouseButton, key, InteractionHand.MAIN_HAND);
+			
+	        if (inputEvent.isCanceled()) {
+	        	return false;
+	        }
+		}
+        
+    	return key.consumeClick();
+	}
+	
+	public static void disableKey(KeyMapping keyMapping) {
+		while (keyMapping.consumeClick()) {}
+		setKeyBind(keyMapping, false);
+	}
+	
 	@OnlyIn(Dist.CLIENT)
 	@Mod.EventBusSubscriber(modid = EpicFightMod.MODID, value = Dist.CLIENT)
 	public static class Events {
 		static ControllEngine controllEngine;
 		
-		@SubscribeEvent
-		public static void mouseEvent(InputEvent.MouseButton event) {
-			if (controllEngine.minecraft.player != null && Minecraft.getInstance().screen == null) {
-				InputConstants.Key input = InputConstants.Type.KEYSYM.getOrCreate(event.getButton());
-				//Controllable Compat
-				InputConstants.Key inputMouse = InputConstants.Type.MOUSE.getOrCreate(event.getButton());
-				
-				for (KeyMapping keybinding : controllEngine.keyHash.getAll(input)) {
-					if (controllEngine.keyFunctions.containsKey(keybinding)) {
-						controllEngine.keyFunctions.get(keybinding).accept(keybinding, event.getAction());
-					}
-				}
-
-				for (KeyMapping keybinding : controllEngine.keyHash.getAll(inputMouse)) {
-					if (controllEngine.keyFunctions.containsKey(keybinding)) {
-						controllEngine.keyFunctions.get(keybinding).accept(keybinding, event.getAction());
-					}
-				}
-			}
-		}
-		
-		@SubscribeEvent
-		public static void keyboardEvent(InputEvent.Key event) {
-			if (controllEngine.minecraft.player != null && Minecraft.getInstance().screen == null) {
-				InputConstants.Key input = InputConstants.Type.KEYSYM.getOrCreate(event.getKey());
-				//Controllable Compat
-				InputConstants.Key inputMouse = InputConstants.Type.MOUSE.getOrCreate(event.getKey());
-				
-				for (KeyMapping keybinding : controllEngine.keyHash.getAll(input)) {
-					if (controllEngine.keyFunctions.containsKey(keybinding)) {
-						controllEngine.keyFunctions.get(keybinding).accept(keybinding, event.getAction());
-					}
-				}
-				
-				for (KeyMapping keybinding : controllEngine.keyHash.getAll(inputMouse)) {
-					if (controllEngine.keyFunctions.containsKey(keybinding)) {
-						controllEngine.keyFunctions.get(keybinding).accept(keybinding, event.getAction());
-					}
-				}
-				
-				for (KeyMapping keybinding : controllEngine.keyHash.getAll(inputMouse)) {
-					if (controllEngine.keyFunctions.containsKey(keybinding)) {
-						controllEngine.keyFunctions.get(keybinding).accept(keybinding, event.getAction());
-					}
-				}
-			}
-		}
-
 		@SubscribeEvent
 		public static void mouseScrollEvent(InputEvent.MouseScrollingEvent event) {
 			if (controllEngine.minecraft.player != null && controllEngine.playerpatch != null && controllEngine.playerpatch.getEntityState().inaction()) {
@@ -529,9 +473,7 @@ public class ControllEngine {
 				return;
 			}
 			
-			if (event.phase == TickEvent.Phase.START) {
-				controllEngine.tick();
-			} else {// event.phase == TickEvent.Phase.END
+			if (event.phase == TickEvent.Phase.END) {
 				for (Object packet : controllEngine.packets) {
 					EpicFightNetworkManager.sendToServer(packet);
 				}

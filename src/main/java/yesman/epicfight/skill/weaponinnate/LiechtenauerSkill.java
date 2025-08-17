@@ -17,7 +17,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import yesman.epicfight.api.utils.AttackResult;
-import yesman.epicfight.client.ClientEngine;
+import yesman.epicfight.client.events.engine.ControllEngine;
 import yesman.epicfight.client.world.capabilites.entitypatch.player.LocalPlayerPatch;
 import yesman.epicfight.gameasset.Animations;
 import yesman.epicfight.gameasset.EpicFightSounds;
@@ -118,7 +118,7 @@ public class LiechtenauerSkill extends WeaponInnateSkill {
 				clientPlayer.setSprinting(false);
 				clientPlayer.sprintTriggerTime = -1;
 				Minecraft mc = Minecraft.getInstance();
-				ClientEngine.getInstance().controllEngine.setKeyBind(mc.options.keySprint, false);
+				ControllEngine.setKeyBind(mc.options.keySprint, false);
 			}
 		});
 	}

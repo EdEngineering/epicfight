@@ -28,7 +28,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import yesman.epicfight.api.animation.types.StaticAnimation;
 import yesman.epicfight.api.utils.AttackResult;
-import yesman.epicfight.client.ClientEngine;
+import yesman.epicfight.client.events.engine.ControllEngine;
 import yesman.epicfight.client.gui.BattleModeGui;
 import yesman.epicfight.gameasset.Animations;
 import yesman.epicfight.gameasset.EpicFightSkills;
@@ -175,7 +175,7 @@ public class GuardSkill extends Skill {
 				clientPlayer.setSprinting(false);
 				clientPlayer.sprintTriggerTime = -1;
 				Minecraft mc = Minecraft.getInstance();
-				ClientEngine.getInstance().controllEngine.setKeyBind(mc.options.keySprint, false);
+				ControllEngine.setKeyBind(mc.options.keySprint, false);
 			}
 		});
 		
