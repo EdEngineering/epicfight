@@ -186,7 +186,7 @@ public class ControllEngine {
 		}
 		
 		while (keyPressed(EpicFightKeyMappings.SWITCH_MODE, false)) {
-			if (this.playerpatch.getOriginal().level().getGameRules().getBoolean(EpicFightGamerules.CAN_SWITCH_COMBAT)) {
+			if (this.playerpatch.getOriginal().level.getGameRules().getBoolean(EpicFightGamerules.CAN_SWITCH_COMBAT)) {
 				this.playerpatch.toggleMode();
 			}
 		}
