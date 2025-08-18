@@ -26,6 +26,8 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
+import net.minecraftforge.common.capabilities.CapabilityToken;
+import net.minecraftforge.common.capabilities.CapabilityManager;
 import yesman.epicfight.api.animation.types.EntityState;
 import yesman.epicfight.client.gui.screen.IngameConfigurationScreen;
 import yesman.epicfight.client.gui.screen.SkillEditScreen;
@@ -64,9 +66,26 @@ public class ControllEngine {
 	private KeyMapping reservedKey;
 	private SkillSlot reservedOrChargingSkillSlot;
 	private KeyMapping currentChargingKey;
-	
+
 	public Options options;
-	
+
+		// Reflection-based check for PlayerRevive 'downed' state
+	private boolean isPlayerDowned(LocalPlayer player) {
+		Object bleedingCap = player.getCapability(
+			CapabilityManager.get(new CapabilityToken<Object>() {})
+		).resolve().orElse(null);
+		if (bleedingCap != null) {
+			try {
+				java.lang.reflect.Method method = bleedingCap.getClass().getMethod("isBleeding");
+				Object result = method.invoke(bleedingCap);
+				if (result instanceof Boolean) {
+					return (Boolean) result;
+				}
+			} catch (Exception ignored) {}
+		}
+		return false;
+	}
+
 	public ControllEngine() {
 		Events.controllEngine = this;
 		this.minecraft = Minecraft.getInstance();
@@ -101,36 +120,29 @@ public class ControllEngine {
 		return this.playerpatch;
 	}
 	
-	public boolean canPlayerMove(EntityState playerState) {
-		   // Block movement if PlayerRevive marks player as 'downed'
-		   boolean isDowned = this.player.getCapability(
-			   net.minecraftforge.common.capabilities.CapabilityManager.get(new net.minecraftforge.common.capabilities.CapabilityToken<team.creative.playerrevive.api.IBleeding>() {})
-		   ).resolve().map(bleeding -> bleeding.isBleeding()).orElse(false);
-		   if (isDowned) {
+	   public boolean canPlayerMove(EntityState playerState) {
+		   if (isPlayerDowned(this.player)) {
 			   return false;
 		   }
 		   return !playerState.movementLocked() || this.player.isRidingJumpable();
-	}
+	   }
 	
 	public boolean canPlayerRotate(EntityState playerState) {
 		return !playerState.turningLocked() || this.player.isRidingJumpable();
 	}
 
-	private boolean canExecuteSkills() {
-		if (this.playerpatch == null || this.playerpatch.isBattleMode() || Minecraft.getInstance().isPaused()) {
-			return false;
-		}
-		if (!this.player.isAlive()) {
-			return false;
-		}
-		// PlayerRevive "downed" check
-		if (this.player.getCapability(
-			net.minecraftforge.common.capabilities.CapabilityManager.get(new net.minecraftforge.common.capabilities.CapabilityToken<team.creative.playerrevive.api.IBleeding>() {})
-		).resolve().map(bleeding -> bleeding.isBleeding()).orElse(false)) {
-			return false;
-		}
-		return true;
-	}
+	   private boolean canExecuteSkills() {
+		   if (this.playerpatch == null || !this.playerpatch.isBattleMode() || Minecraft.getInstance().isPaused()) {
+			   return false;
+		   }
+		   if (!this.player.isAlive()) {
+			   return false;
+		   }
+		   if (isPlayerDowned(this.player)) {
+			   return false;
+		   }
+		   return true;
+	   }
 
 	private void attackKeyPressed(KeyMapping key, int action) {
 		if (action == 1 && canExecuteSkills() && this.currentChargingKey != key) {
