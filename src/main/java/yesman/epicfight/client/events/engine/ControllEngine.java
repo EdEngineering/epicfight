@@ -29,6 +29,7 @@ import net.minecraftforge.fml.util.ObfuscationReflectionHelper;
 import net.minecraftforge.common.capabilities.CapabilityToken;
 import net.minecraftforge.common.capabilities.CapabilityManager;
 import yesman.epicfight.api.animation.types.EntityState;
+import yesman.epicfight.compat.IBleeding;
 import yesman.epicfight.client.gui.screen.IngameConfigurationScreen;
 import yesman.epicfight.client.gui.screen.SkillEditScreen;
 import yesman.epicfight.client.input.EpicFightKeyMappings;
@@ -69,22 +70,12 @@ public class ControllEngine {
 
 	public Options options;
 
-		// Reflection-based check for PlayerRevive 'downed' state
-	private boolean isPlayerDowned(LocalPlayer player) {
-		Object bleedingCap = player.getCapability(
-			CapabilityManager.get(new CapabilityToken<Object>() {})
-		).resolve().orElse(null);
-		if (bleedingCap != null) {
-			try {
-				java.lang.reflect.Method method = bleedingCap.getClass().getMethod("isBleeding");
-				Object result = method.invoke(bleedingCap);
-				if (result instanceof Boolean) {
-					return (Boolean) result;
-				}
-			} catch (Exception ignored) {}
+		// Direct capability check for PlayerRevive 'downed' state using IBleeding
+		private boolean isPlayerDowned(LocalPlayer player) {
+			return player.getCapability(
+				CapabilityManager.get(new CapabilityToken<IBleeding>() {})
+			).resolve().map(IBleeding::isBleeding).orElse(false);
 		}
-		return false;
-	}
 
 	public ControllEngine() {
 		Events.controllEngine = this;
