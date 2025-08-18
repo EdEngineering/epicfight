@@ -70,12 +70,12 @@ public class ControllEngine {
 
 	public Options options;
 
-		// Direct capability check for PlayerRevive 'downed' state using IBleeding
-		private boolean isPlayerDowned(LocalPlayer player) {
-			return player.getCapability(
-				CapabilityManager.get(new CapabilityToken<IBleeding>() {})
-			).resolve().map(IBleeding::isBleeding).orElse(false);
-		}
+	// Direct capability check for PlayerRevive 'downed' state using IBleeding
+	private boolean isPlayerDowned(LocalPlayer player) {
+		return player.getCapability(
+			CapabilityManager.get(new CapabilityToken<IBleeding>() {})
+		).resolve().map(IBleeding::isBleeding).orElse(false);
+	}
 
 	public ControllEngine() {
 		Events.controllEngine = this;

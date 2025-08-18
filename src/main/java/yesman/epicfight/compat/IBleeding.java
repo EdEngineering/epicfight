@@ -33,7 +33,7 @@ public interface IBleeding extends INBTSerializable<CompoundTag> {
     
     public DamageSource getSource();
     
-    public CombatTrackerClone getTrackerClone();
+    // public CombatTrackerClone getTrackerClone();
     
     public boolean isItemConsumed();
     
