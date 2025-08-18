@@ -102,7 +102,14 @@ public class ControllEngine {
 	}
 	
 	public boolean canPlayerMove(EntityState playerState) {
-		return !playerState.movementLocked() || this.player.isRidingJumpable();
+		   // Block movement if PlayerRevive marks player as 'downed'
+		   boolean isDowned = this.player.getCapability(
+			   net.minecraftforge.common.capabilities.CapabilityManager.get(new net.minecraftforge.common.capabilities.CapabilityToken<team.creative.playerrevive.api.IBleeding>() {})
+		   ).resolve().map(bleeding -> bleeding.isBleeding()).orElse(false);
+		   if (isDowned) {
+			   return false;
+		   }
+		   return !playerState.movementLocked() || this.player.isRidingJumpable();
 	}
 	
 	public boolean canPlayerRotate(EntityState playerState) {
@@ -110,7 +117,19 @@ public class ControllEngine {
 	}
 
 	private boolean canExecuteSkills() {
-		return this.playerpatch != null && this.playerpatch.isBattleMode() && this.player.isAlive() && !Minecraft.getInstance().isPaused();
+		if (this.playerpatch == null || this.playerpatch.isBattleMode() || Minecraft.getInstance().isPaused()) {
+			return false;
+		}
+		if (!this.player.isAlive()) {
+			return false;
+		}
+		// PlayerRevive "downed" check
+		if (this.player.getCapability(
+			net.minecraftforge.common.capabilities.CapabilityManager.get(new net.minecraftforge.common.capabilities.CapabilityToken<team.creative.playerrevive.api.IBleeding>() {})
+		).resolve().map(bleeding -> bleeding.isBleeding()).orElse(false)) {
+			return false;
+		}
+		return true;
 	}
 
 	private void attackKeyPressed(KeyMapping key, int action) {
