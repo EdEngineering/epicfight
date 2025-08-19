@@ -10,9 +10,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mojang.blaze3d.platform.InputConstants;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Options;
@@ -73,8 +70,6 @@ public class ControllEngine {
 
 	public Options options;
 
-	private static final Logger LOGGER = LogManager.getLogger("EpicFight");
-
 // Direct capability check for PlayerRevive 'downed' state using IBleeding
 	private boolean isPlayerDowned(LocalPlayer player) {
 		var cap = player.getCapability(
@@ -82,7 +77,6 @@ public class ControllEngine {
 		).resolve();
 		boolean present = cap.isPresent();
 		boolean bleeding = cap.map(IBleeding::isBleeding).orElse(false);
-		LOGGER.info("[EpicFight] isPlayerDowned: capability present=" + present + ", isBleeding=" + bleeding);
 		return bleeding;
 	}
 
